@@ -1,0 +1,10 @@
+[package]
+name = "wordle-solver"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Lightweight GUI framework (egui via eframe) for a desktop app
+eframe = "0.22"
+# small helper to initialize arrays (used by the UI code)
+array-init = "1.0"
