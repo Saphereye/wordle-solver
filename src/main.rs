@@ -52,7 +52,6 @@ struct WordleApp {
     use_full_guess_list: bool,
     suggestion_req_tx: mpsc::Sender<(Vec<String>, Vec<String>, bool)>,
     suggestion_res_rx: mpsc::Receiver<Vec<(String, f64, f64)>>,
-    loaded_count: usize,
     auto_filled_row: Option<usize>,
     last_input_time: Option<std::time::Instant>,
     pending_recompute: bool,
@@ -66,7 +65,6 @@ impl WordleApp {
         suggestion_res_rx: mpsc::Receiver<Vec<(String, f64, f64)>>,
     ) -> Self {
         let initial_candidates = words.clone();
-        let loaded_count = initial_candidates.len();
         Self {
             grid: array_init::array_init(|_| array_init::array_init(|_| String::new())),
             states: array_init::array_init(|_| array_init::array_init(|_| TileState::Unknown)),
@@ -78,7 +76,6 @@ impl WordleApp {
             use_full_guess_list: false,
             suggestion_req_tx,
             suggestion_res_rx,
-            loaded_count,
             auto_filled_row: None,
             last_input_time: None,
             pending_recompute: false,
@@ -295,8 +292,6 @@ impl Default for WordleApp {
 
 impl eframe::App for WordleApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        use egui::ScrollArea;
-
         if let Ok(s) = self.suggestion_res_rx.try_recv() {
             self.suggestions = s;
         }
@@ -402,11 +397,7 @@ impl eframe::App for WordleApp {
         // --- Top panel ---
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("Lightweight Wordle solver");
-                    ui.label("Type letters to fill the active row; Backspace deletes; Enter advances row.");
-                });
-                if ui.button("Clear All").clicked() {
+                if ui.button("Clear All Cells").clicked() {
                     for r in 0..ROWS {
                         for c in 0..COLS {
                             self.grid[r][c].clear();
@@ -427,15 +418,15 @@ impl eframe::App for WordleApp {
         egui::SidePanel::right("side")
             .min_width(260.0)
             .show(ctx, |ui| {
-                ui.heading("Suggestions (information gain)");
+                ui.heading("Suggestions");
                 ui.separator();
-                ui.checkbox(&mut self.use_full_guess_list, "Use full word list for suggestions (slower)");
-                ui.label(format!("Loaded: {} words", self.loaded_count));
                 let top_n = 12usize;
                 if self.suggestions.is_empty() {
                     ui.label("No suggestions yet.");
                 } else {
-                    for (i, (guess, info, expected)) in self.suggestions.iter().take(top_n).enumerate() {
+                    for (i, (guess, info, expected)) in
+                        self.suggestions.iter().take(top_n).enumerate()
+                    {
                         ui.horizontal(|ui| {
                             ui.monospace(format!("{:2}. {}", i + 1, guess));
                             ui.add_space(6.0);
@@ -445,29 +436,6 @@ impl eframe::App for WordleApp {
                         });
                     }
                 }
-                ui.add_space(6.0);
-                ui.separator();
-                ui.label(format!("Matching candidates: {}", self.candidates.len()));
-                ui.add_space(4.0);
-                ScrollArea::vertical().show(ui, |ui| {
-                    for w in &self.candidates {
-                        ui.monospace(w);
-                    }
-                });
-                ui.add_space(8.0);
-                if ui.button("Recompute").clicked() {
-                    self.recompute_candidates();
-                }
-                ui.add_space(6.0);
-                if ui.button("Reload words.txt").clicked() {
-                    let words = get_words_list();
-                    self.word_list = words;
-                    self.candidates = self.word_list.clone();
-                    self.loaded_count = self.word_list.len();
-                    self.recompute_candidates();
-                }
-                ui.add_space(6.0);
-                ui.label("Tip: Type directly to fill the active row; left-click to focus a tile; right-click to cycle colors.");
             });
 
         // --- Center: draw grid and allow click interactions ---
@@ -483,9 +451,17 @@ impl eframe::App for WordleApp {
                             ui.painter().rect_filled(rect, 6.0, bg);
                             // highlight focused cell with a white thicker border
                             if self.focused_cell == Some((r, c)) {
-                                ui.painter().rect_stroke(rect, 6.0, Stroke::new(3.0, Color32::WHITE));
+                                ui.painter().rect_stroke(
+                                    rect,
+                                    6.0,
+                                    Stroke::new(3.0, Color32::WHITE),
+                                );
                             } else {
-                                ui.painter().rect_stroke(rect, 6.0, Stroke::new(1.0, Color32::BLACK));
+                                ui.painter().rect_stroke(
+                                    rect,
+                                    6.0,
+                                    Stroke::new(1.0, Color32::BLACK),
+                                );
                             }
                             let letter = if self.grid[r][c].is_empty() {
                                 " ".to_owned()
@@ -524,26 +500,6 @@ impl eframe::App for WordleApp {
                         }
                     });
                     ui.add_space(8.0);
-                }
-
-                ui.separator();
-                ui.add_space(6.0);
-                // Small editor controls for focused cell (input entered via keyboard events above)
-                if let Some((fr, fc)) = self.focused_cell {
-                    ui.horizontal(|ui| {
-                        ui.label(format!("Editing row {}, col {}", fr + 1, fc + 1));
-                        if ui.button("Clear").clicked() {
-                            self.grid[fr][fc].clear();
-                            self.states[fr][fc] = TileState::Unknown;
-                            self.pending_recompute = true;
-                            self.last_input_time = Some(Instant::now());
-                        }
-                        if ui.button("Unset Focus").clicked() {
-                            self.focused_cell = None;
-                        }
-                    });
-                } else {
-                    ui.label("Type letters to fill the active row; click a tile to focus. Backspace deletes; Enter advances row.");
                 }
             });
         });
