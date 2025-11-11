@@ -306,6 +306,12 @@ impl eframe::App for WordleApp {
                             // If a cell is focused, write there and advance focus to next column.
                             if let Some((r, c)) = self.focused_cell {
                                 self.grid[r][c] = ch.to_ascii_lowercase().to_string();
+                                // mark that the user has interacted with this auto-filled row
+                                if let Some(afr) = self.auto_filled_row {
+                                    if afr == r {
+                                        self.auto_filled_row = None;
+                                    }
+                                }
                                 // advance focus
                                 let next_c = if c + 1 < COLS { c + 1 } else { COLS - 1 };
                                 self.focused_cell = Some((r, next_c));
@@ -315,6 +321,12 @@ impl eframe::App for WordleApp {
                             } else {
                                 // No focused cell: put in first empty cell of active row (or overwrite last)
                                 let ar = self.active_row;
+                                // mark that the user has interacted with this auto-filled row
+                                if let Some(afr) = self.auto_filled_row {
+                                    if afr == ar {
+                                        self.auto_filled_row = None;
+                                    }
+                                }
                                 let mut placed = false;
                                 for cc in 0..COLS {
                                     if self.grid[ar][cc].is_empty() {
@@ -481,16 +493,34 @@ impl eframe::App for WordleApp {
 
                             if response.clicked() {
                                 // left-click: focus this tile (do not change color)
+                                // this is a user interaction -> clear auto-filled-row marker so the row is treated as a real guess
+                                if let Some(afr) = self.auto_filled_row {
+                                    if afr == r {
+                                        self.auto_filled_row = None;
+                                    }
+                                }
                                 self.focused_cell = Some((r, c));
                                 self.active_row = r;
                             }
                             if response.secondary_clicked() {
                                 // right-click: cycle color and recompute
+                                // this is a user interaction -> clear auto-filled-row marker so the row is treated as a real guess
+                                if let Some(afr) = self.auto_filled_row {
+                                    if afr == r {
+                                        self.auto_filled_row = None;
+                                    }
+                                }
                                 self.states[r][c] = self.states[r][c].cycle();
                                 self.recompute_candidates();
                             }
                             if response.double_clicked() {
                                 // clear tile on double-click
+                                // this is a user interaction -> clear auto-filled-row marker so the row is treated as a real guess
+                                if let Some(afr) = self.auto_filled_row {
+                                    if afr == r {
+                                        self.auto_filled_row = None;
+                                    }
+                                }
                                 self.grid[r][c].clear();
                                 self.states[r][c] = TileState::Unknown;
                                 self.focused_cell = Some((r, c));
